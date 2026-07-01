@@ -4,6 +4,7 @@ from typing import Any
 
 from src.agents.webshell_detection_agent import WebShellDetectionAgent
 from src.models import AlertRecord, JudgementResult
+from src.workflow.policy import is_limited_auto_containment_candidate, workflow_action_for_alert
 
 
 class AlertJudgementAgent:
@@ -41,6 +42,10 @@ class AlertJudgementAgent:
         "data_exfiltration_indicator": 30,
         "multi_stage_indicator": 30,
         "new_source_ip": 10,
+        "threat_intel_ip_hit": 35,
+        "high_confidence_ioc": 20,
+        "low_business_impact": 0,
+        "auto_containment_candidate": 5,
     }
 
     def __init__(self, weights: dict[str, float] | None = None) -> None:
@@ -70,7 +75,7 @@ class AlertJudgementAgent:
         explanation = self._build_explanation(record, scores, risk_score, risk_level, related_records)
         actions = self._recommended_actions(record, risk_level)
         need_human_review = risk_level in {"high", "critical"}
-        workflow_action = self.map_workflow_action(risk_level)
+        workflow_action = self.map_workflow_action(risk_level, record, risk_score)
         is_valid_alert = self._is_valid_alert(record, risk_score)
 
         return JudgementResult(
@@ -108,13 +113,12 @@ class AlertJudgementAgent:
         return "critical"
 
     @staticmethod
-    def map_workflow_action(risk_level: str) -> str:
-        return {
-            "low": "archive",
-            "medium": "create_ticket",
-            "high": "mandatory_human_review",
-            "critical": "escalate_incident",
-        }[risk_level]
+    def map_workflow_action(
+        risk_level: str,
+        alert: AlertRecord | dict[str, Any] | None = None,
+        risk_score: float | None = None,
+    ) -> str:
+        return workflow_action_for_alert(risk_level, alert=alert, risk_score=risk_score)
 
     def _score_asset_importance(self, alert: AlertRecord) -> tuple[float, str]:
         score = self.ASSET_IMPORTANCE_SCORE.get(alert.asset_importance, 20)
@@ -259,6 +263,12 @@ class AlertJudgementAgent:
         if risk_level == "low":
             return ["自动归档仿真告警", "保留审计日志", "纳入周期性规则复核"]
         if risk_level == "medium":
+            if is_limited_auto_containment_candidate(alert, risk_level):
+                return [
+                    "触发受限自动处置仿真流程",
+                    "仅记录仿真临时封禁IP的审计日志，不下发真实网络策略",
+                    "核查威胁情报命中来源、业务白名单和回滚条件",
+                ]
             return ["生成普通工单", "复核资产、账号和业务窗口", "补充同源告警关联分析"]
 
         actions = ["进入人工复核", "收集相关日志和资产上下文", "确认后再执行真实处置操作"]

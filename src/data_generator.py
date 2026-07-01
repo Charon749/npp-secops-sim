@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from src.models import AlertRecord, to_plain_dict
+from src.workflow.policy import workflow_action_for_alert
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -195,12 +196,12 @@ def build_sample_alerts() -> list[AlertRecord]:
         ("ASSET-SCAN-01", "172.16.70.10", ["authorized_internal_scan", "multi_port_access"], "low"),
         ("ASSET-SCAN-01", "172.16.70.11", ["authorized_internal_scan", "high_connection_frequency"], "low"),
         ("ASSET-OA-01", "172.16.70.9", ["authorized_internal_scan", "multi_port_access"], "low"),
-        ("ASSET-FILE-01", "203.0.113.24", ["high_connection_frequency"], "medium"),
+        ("ASSET-SCAN-01", "203.0.113.24", ["high_connection_frequency", "threat_intel_ip_hit", "high_confidence_ioc", "low_business_impact", "auto_containment_candidate"], "medium"),
         ("ASSET-FILE-01", "203.0.113.25", ["external_probe"], "medium"),
         ("ASSET-WEB-01", "198.51.100.30", ["multi_port_access"], "medium"),
         ("ASSET-BACKUP-01", "172.16.70.9", ["authorized_internal_scan", "multi_port_access"], "low"),
         ("ASSET-WEB-02", "198.51.100.31", ["multi_port_access", "high_connection_frequency"], "high"),
-        ("ASSET-OA-01", "198.51.100.32", ["external_probe"], "medium"),
+        ("ASSET-SCAN-01", "198.51.100.32", ["external_probe", "threat_intel_ip_hit", "high_confidence_ioc", "low_business_impact", "auto_containment_candidate"], "medium"),
     ]
     for asset_id, src_ip, tags, risk in scan_cases:
         is_valid = "authorized_internal_scan" not in tags
@@ -219,6 +220,30 @@ def build_sample_alerts() -> list[AlertRecord]:
                 [],
                 is_valid,
                 risk if is_valid else "low",
+            )
+        )
+        idx += 1
+
+    limited_auto_cases = [
+        ("ASSET-SCAN-01", "outbound_connection", "simulated outbound IOC hit with low business impact", "sensor_svc", "203.0.113.61", "network_monitor", ["threat_intel_ip_hit", "high_confidence_ioc", "low_business_impact", "auto_containment_candidate"], "medium"),
+        ("ASSET-SCAN-01", "port_scan", "simulated threat-intelligence blocklist probe against monitoring endpoint", "unknown", "198.51.100.61", "network_monitor", ["external_probe", "threat_intel_ip_hit", "high_confidence_ioc", "low_business_impact", "auto_containment_candidate"], "medium"),
+    ]
+    for asset_id, event_type, desc, user_id, src_ip, process, tags, risk in limited_auto_cases:
+        alerts.append(
+            make_alert(
+                idx,
+                11 * idx,
+                asset_id,
+                event_type,
+                desc,
+                user_id,
+                src_ip,
+                "",
+                process,
+                tags,
+                [],
+                True,
+                risk,
             )
         )
         idx += 1
@@ -330,7 +355,7 @@ def generate_sample_data(data_dir: Path | None = None) -> list[AlertRecord]:
             "ground_truth_validity": alert.ground_truth_validity,
             "ground_truth_risk_level": alert.ground_truth_risk_level,
             "ground_truth_event_type": alert.ground_truth_event_type,
-            "expected_workflow_action": expected_workflow_action(alert.ground_truth_risk_level),
+            "expected_workflow_action": expected_workflow_action(alert.ground_truth_risk_level, alert),
         }
         for alert in alerts
     ]
@@ -338,13 +363,8 @@ def generate_sample_data(data_dir: Path | None = None) -> list[AlertRecord]:
     return alerts
 
 
-def expected_workflow_action(risk_level: str) -> str:
-    return {
-        "low": "archive",
-        "medium": "create_ticket",
-        "high": "mandatory_human_review",
-        "critical": "escalate_incident",
-    }[risk_level]
+def expected_workflow_action(risk_level: str, alert: AlertRecord | None = None) -> str:
+    return workflow_action_for_alert(risk_level, alert=alert)
 
 
 def main() -> None:

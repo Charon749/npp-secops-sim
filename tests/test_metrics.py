@@ -73,6 +73,21 @@ def workflow(alert_id, risk_level):
     )
 
 
+def limited_auto_alert(alert_id="A-auto"):
+    item = alert(alert_id, True, "medium")
+    item.asset_importance = "low"
+    item.asset_type = "security_tool"
+    item.event_type = "port_scan"
+    item.behavior_tags = [
+        "external_probe",
+        "threat_intel_ip_hit",
+        "high_confidence_ioc",
+        "low_business_impact",
+        "auto_containment_candidate",
+    ]
+    return item
+
+
 def test_metrics_are_computed_from_ground_truth():
     alerts = [
         alert("A1", True, "high"),
@@ -95,6 +110,27 @@ def test_metrics_are_computed_from_ground_truth():
     assert metrics["risk_level_consistency_rate"] == 0.6667
     assert metrics["workflow_trigger_accuracy"] == 0.6667
     assert metrics["high_risk_human_review_rate"] == 1.0
+
+
+def test_metrics_accept_limited_auto_containment_workflow():
+    alerts = [limited_auto_alert()]
+    judgements = [judgement("A-auto", True, "medium", 55)]
+    workflows = [
+        WorkflowResult(
+            alert_id="A-auto",
+            workflow_action="simulated_block_ip",
+            assigned_role="automation_orchestrator",
+            status="simulated_blocked",
+            audit_log=["audit"],
+            need_human_review=False,
+            closed_loop_completed=True,
+        )
+    ]
+
+    metrics = compute_metrics(alerts, judgements, workflows)
+
+    assert metrics["workflow_trigger_accuracy"] == 1.0
+    assert metrics["closed_loop_rate"] == 1.0
 
 
 def test_report_files_are_generated(tmp_path: Path):

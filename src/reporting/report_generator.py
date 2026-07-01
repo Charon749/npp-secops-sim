@@ -119,6 +119,7 @@ def write_markdown_report(
 ) -> None:
     scenario_counts = Counter(get_event_type_label(alert.event_type) for alert in alerts)
     workflow_counts = Counter(get_workflow_action_label(item.workflow_action) for item in workflows)
+    simulated_block_count = sum(item.workflow_action == "simulated_block_ip" for item in workflows)
     risk_counts = Counter(get_risk_level_label(item.risk_level) for item in judgements)
     top_cases = sorted(judgements, key=lambda item: item.risk_score, reverse=True)[:3]
     workflow_map = {item.alert_id: item for item in workflows}
@@ -137,6 +138,7 @@ def write_markdown_report(
         "- 本项目不生成真实攻击代码、不生成真实WebShell、不执行扫描、利用、爆破、提权或横向移动。",
         "- WebShell相关场景仅以文件路径、上传目录、访问行为和风险标签等元数据表示。",
         "- 高风险与严重风险事件只触发人工复核或升级处置流程，不自动执行封禁、删除、隔离等真实动作。",
+        "- 受限自动处置仅作为离线仿真动作记录审计日志，不连接真实网络、不下发真实封禁策略。",
         "",
         "## 三、数据规模与场景分布",
         "",
@@ -203,6 +205,12 @@ def write_markdown_report(
     )
     for action, count in sorted(workflow_counts.items()):
         lines.append(f"| {action} | {count} |")
+    lines.extend(
+        [
+            "",
+            f"本次仿真中，受限自动处置仿真数量为 {simulated_block_count} 条。该动作表示高置信威胁情报命中且低业务影响的样本进入仿真临时封禁IP流程，仅用于验证工作流协同和审计闭环，不代表真实网络封禁。",
+        ]
+    )
 
     if incidents:
         lines.extend(["", "### 事件预警摘要", ""])
@@ -231,6 +239,7 @@ def write_markdown_report(
             "5. 本项目结果依赖模拟数据和评分规则。",
             "6. 后续可接入脱敏历史告警数据进行进一步验证。",
             "7. 高风险事件必须由人工复核，智能体仅提供辅助研判和流程触发建议。",
+            "8. 受限自动处置仅适用于高置信、低业务影响、可回滚的仿真样本，真实环境中仍需结合白名单、业务影响和人工审批策略。",
             "",
         ]
     )

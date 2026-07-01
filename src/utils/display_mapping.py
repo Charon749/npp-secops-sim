@@ -98,6 +98,7 @@ ASSET_IMPORTANCE_MAP = {
 WORKFLOW_ACTION_MAP = {
     "archive": "自动归档",
     "create_ticket": "创建工单",
+    "simulated_block_ip": "仿真临时封禁IP",
     "mandatory_human_review": "人工复核",
     "escalate_incident": "升级处置",
 }
@@ -149,6 +150,10 @@ BEHAVIOR_TAG_MAP = {
     "large_volume_access": "大量访问",
     "data_exfiltration_indicator": "数据异常外传迹象",
     "multi_stage_indicator": "多阶段关联迹象",
+    "threat_intel_ip_hit": "威胁情报IP命中",
+    "high_confidence_ioc": "高置信威胁指标",
+    "low_business_impact": "低业务影响",
+    "auto_containment_candidate": "自动遏制候选",
     "scheduled_backup": "计划备份",
     "backup_window": "备份窗口",
     "planned_maintenance": "计划维护",
@@ -182,6 +187,7 @@ STATUS_MAP = {
     "archived": "已归档",
     "created": "已创建",
     "ticket_opened": "工单已创建",
+    "simulated_blocked": "已记录仿真封禁",
     "escalated": "已升级",
     "review_required": "待人工复核",
     "pending_human_review": "待人工复核",
@@ -198,6 +204,7 @@ ROLE_MAP = {
     "incident_commander": "事件负责人",
     "auditor": "审计人员",
     "security_auditor": "审计人员",
+    "automation_orchestrator": "自动化编排器",
     "tester": "测试人员",
     "system": "系统",
 }
@@ -291,6 +298,9 @@ TEXT_REPLACEMENTS = {
     "status=": "当前状态=",
     "high-risk event is not auto-closed and requires manual review": "高风险事件不会自动关闭，需要人工复核",
     "low-risk alert archived with audit evidence retained": "低风险告警已归档，并保留审计证据",
+    "matched limited auto-containment policy: high-confidence IOC, low business impact, non-critical asset": "命中受限自动处置策略：高置信威胁指标、低业务影响、非关键资产",
+    "simulated temporary IP block recorded for offline experiment only; no real network policy was changed": "已记录仿真临时封禁IP，仅用于离线实验，未变更任何真实网络策略",
+    "simulated action is reversible and retained for audit review": "仿真动作具备可回滚语义，并保留用于审计复核",
 }
 
 

@@ -76,10 +76,10 @@ SCORE_DIMENSIONS = [
 
 def main() -> None:
     st.set_page_config(
-        page_title="核电厂管理网络告警研判智能体仿真平台 V0.1",
+        page_title="核电厂管理网络告警研判智能体仿真平台 V0.2",
         layout="wide",
     )
-    st.title("核电厂管理网络告警研判智能体仿真平台 V0.1")
+    st.title("核电厂管理网络告警研判智能体仿真平台 V0.2")
     st.caption("离线仿真展示：模拟告警 -> 智能体研判 -> 工作流流转 -> 指标统计")
     st.warning(
         "本平台仅用于离线仿真验证，不连接真实网络系统，不执行真实攻击行为，"
@@ -256,7 +256,14 @@ def compute_metrics_from_results_df(results_df: pd.DataFrame) -> dict[str, float
     true_negative = int((~gt_valid & ~pred_valid).sum())
     false_positive = int((~gt_valid & pred_valid).sum())
     false_negative = int((gt_valid & ~pred_valid).sum())
-    expected_actions = results_df["ground_truth_risk_level"].map(expected_workflow_action)
+    expected_actions = results_df.apply(
+        lambda row: expected_workflow_action(
+            str(row.get("ground_truth_risk_level", "low")),
+            alert=row.to_dict(),
+            risk_score=float(row.get("risk_score") or 0.0),
+        ),
+        axis=1,
+    )
     high_risk = results_df["risk_level"].isin(["high", "critical"])
     reviewed = results_df["need_human_review"].map(to_bool)
 
@@ -331,13 +338,16 @@ def render_overview(alerts: list[AlertRecord], results_df: pd.DataFrame) -> None
     metric_columns[0].metric("需要人工复核数量", stats["human_review_count"])
     metric_columns[1].metric("已闭环流程数量", stats["closed_loop_count"])
     metric_columns[2].metric("本地评分平均处理耗时", f"{stats['avg_judgement_ms']:.4f} ms")
+    metric_columns = st.columns(3)
+    metric_columns[0].metric("受限自动处置仿真数量", stats["simulated_auto_count"])
 
     st.markdown(
         "本页面用于展示仿真平台整体运行状态。仿真平台通过构造结构化告警、日志和文件元数据记录，"
         "模拟安全检测或渗透测试演练在安全运维系统中留下的告警痕迹。告警研判智能体基于这些痕迹"
         "进行风险评分、证据聚合和处置建议生成，工作流引擎根据风险等级触发归档、工单、人工复核"
-        "或升级处置流程。高风险和严重风险告警均进入人工复核或升级处置流程。当前比例为仿真样本"
-        "分布结果，不代表真实核电厂管理网络告警比例。"
+        "或升级处置流程；其中少量命中高置信威胁情报且低业务影响的样本，可触发受限自动处置仿真。"
+        "该动作仅记录仿真临时封禁IP的审计结果，不连接真实网络、不下发真实策略。高风险和严重风险告警均进入人工复核"
+        "或升级处置流程。当前比例为仿真样本分布结果，不代表真实核电厂管理网络告警比例。"
     )
 
     alert_df = alerts_to_df(alerts)
@@ -405,7 +415,8 @@ def render_judgement_tab(results_df: pd.DataFrame, dashboard_state: dict[str, An
     st.subheader("告警研判智能体输出")
     st.markdown(
         "本页展示告警研判智能体对模拟告警的风险评分、风险等级、证据摘要和处置建议。"
-        "智能体仅提供辅助研判结果，高风险和严重风险告警仍需人工复核。"
+        "智能体仅提供辅助研判结果；少量高置信低影响样本可触发受限自动处置仿真，"
+        "高风险和严重风险告警仍需人工复核或升级处置。"
     )
     if results_df.empty:
         st.info("尚未运行仿真研判。请点击侧边栏“运行仿真研判”。")
@@ -416,7 +427,7 @@ def render_judgement_tab(results_df: pd.DataFrame, dashboard_state: dict[str, An
         pd.DataFrame(
             [
                 {"风险等级": "低风险", "分数区间": "0-39 分", "流程约束": "自动归档并保留审计日志"},
-                {"风险等级": "中风险", "分数区间": "40-59 分", "流程约束": "创建普通工单"},
+                {"风险等级": "中风险", "分数区间": "40-59 分", "流程约束": "创建普通工单；满足高置信低影响条件时可触发受限自动处置仿真"},
                 {"风险等级": "高风险", "分数区间": "60-79 分", "流程约束": "强制进入人工复核流程"},
                 {"风险等级": "严重风险", "分数区间": "80-100 分", "流程约束": "触发升级处置流程"},
             ]
@@ -487,8 +498,8 @@ def render_workflow_tab(results_df: pd.DataFrame) -> None:
     st.subheader("工作流流转结果")
     st.markdown(
         "本页展示告警研判结果进入工作流后的流转情况。系统根据风险等级触发自动归档、创建工单、"
-        "人工复核或升级处置流程，并记录审计日志。智能体负责辅助研判，工作流负责过程约束；"
-        "关键风险事件必须经过人工复核。"
+        "受限自动处置仿真、人工复核或升级处置流程，并记录审计日志。智能体负责辅助研判，工作流负责过程约束；"
+        "受限自动处置只记录仿真临时封禁IP，不连接真实网络、不下发真实策略，关键风险事件必须经过人工复核。"
     )
     if results_df.empty:
         st.info("尚未运行仿真研判。")
@@ -511,6 +522,7 @@ def render_workflow_tab(results_df: pd.DataFrame) -> None:
 
         - 低风险：自动归档，保留审计日志
         - 中风险：创建普通工单，由安全运维人员处理
+        - 受限自动处置：仅限中风险、非关键资产、高置信威胁情报命中且低业务影响的样本，记录仿真临时封禁IP
         - 高风险：强制进入人工复核流程
         - 严重风险：触发升级处置流程，并保留完整审计记录
         """
@@ -532,6 +544,8 @@ def render_workflow_tab(results_df: pd.DataFrame) -> None:
     ]
     if detail["risk_level"] in {"high", "critical"}:
         st.warning("该告警为高风险或严重风险，不允许显示为自动关闭。")
+    if str(detail["workflow_action"]) == "simulated_block_ip":
+        st.info("该告警触发的是受限自动处置仿真：系统仅记录临时封禁IP的模拟结果和审计日志，不执行真实网络封禁。")
     st.markdown("\n".join(f"- {item}" for item in timeline))
     with st.expander("查看审计日志"):
         render_bullets(audit_log)
@@ -651,6 +665,7 @@ def build_overview_stats(alerts: list[AlertRecord], results_df: pd.DataFrame) ->
             "valid_alerts": valid_count,
             "high_risk_alerts": high_count,
             "human_review_count": 0,
+            "simulated_auto_count": 0,
             "closed_loop_count": 0,
             "avg_judgement_ms": 0.0,
         }
@@ -659,6 +674,7 @@ def build_overview_stats(alerts: list[AlertRecord], results_df: pd.DataFrame) ->
         "valid_alerts": int(results_df["is_valid_alert"].map(to_bool).sum()),
         "high_risk_alerts": int(results_df["risk_level"].isin(["high", "critical"]).sum()),
         "human_review_count": int(results_df["need_human_review"].map(to_bool).sum()),
+        "simulated_auto_count": int((results_df["workflow_action"] == "simulated_block_ip").sum()),
         "closed_loop_count": int(results_df["closed_loop_completed"].map(to_bool).sum()),
         "avg_judgement_ms": float(results_df.get("judgement_time_ms", pd.Series([0])).mean()),
     }
@@ -703,6 +719,11 @@ def render_risk_decision_basis(
     st.markdown("#### 风险等级判定依据")
     st.dataframe(pd.DataFrame(basis_rows), use_container_width=True, hide_index=True)
     st.info(risk_decision_sentence(risk_level, risk_score, workflow_action, tag_text))
+    if workflow_action == "simulated_block_ip":
+        st.success(
+            "触发受限自动处置原因：该告警命中威胁情报IP、高置信威胁指标、低业务影响和自动遏制候选标签，"
+            "且不涉及关键资产、多阶段攻击链或严重风险。平台仅记录仿真临时封禁IP，不执行真实网络动作。"
+        )
     if risk_level == "high":
         st.warning(
             "触发人工复核原因：风险评分进入高风险区间，同时资产重要性、行为异常、威胁特征或多源关联"
@@ -740,7 +761,13 @@ def risk_decision_sentence(risk_level: str, risk_score: float, workflow_action: 
     if risk_level == "low":
         reason = "风险总分低于 40 分，未形成明显威胁聚合证据，因此按低风险处理。"
     elif risk_level == "medium":
-        reason = "风险总分位于 40-59 分区间，存在一定异常迹象，但尚未达到强制人工复核阈值。"
+        if workflow_action == "simulated_block_ip":
+            reason = (
+                "风险总分位于 40-59 分区间，同时命中高置信威胁情报、低业务影响和非关键资产约束，"
+                "因此进入受限自动处置仿真流程。"
+            )
+        else:
+            reason = "风险总分位于 40-59 分区间，存在一定异常迹象，但尚未达到强制人工复核阈值。"
     elif risk_level == "high":
         reason = "风险总分位于 60-79 分区间，已达到高风险阈值，需要进入人工复核流程。"
     else:

@@ -3,15 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 from src.models import AlertRecord, JudgementResult, WorkflowResult
+from src.workflow.policy import workflow_action_for_alert
 
 
-def expected_workflow_action(risk_level: str) -> str:
-    return {
-        "low": "archive",
-        "medium": "create_ticket",
-        "high": "mandatory_human_review",
-        "critical": "escalate_incident",
-    }[risk_level]
+def expected_workflow_action(
+    risk_level: str,
+    alert: AlertRecord | dict[str, Any] | None = None,
+    risk_score: float | None = None,
+) -> str:
+    return workflow_action_for_alert(risk_level, alert=alert, risk_score=risk_score)
 
 
 def compute_metrics(
@@ -54,7 +54,11 @@ def compute_metrics(
         if judgement["risk_level"] == alert.get("ground_truth_risk_level"):
             risk_match += 1
 
-        expected_action = expected_workflow_action(str(alert.get("ground_truth_risk_level", "low")))
+        expected_action = expected_workflow_action(
+            str(alert.get("ground_truth_risk_level", "low")),
+            alert=alert,
+            risk_score=float(judgement.get("risk_score") or 0.0),
+        )
         if workflow["workflow_action"] == expected_action:
             workflow_match += 1
 

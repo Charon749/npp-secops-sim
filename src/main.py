@@ -44,7 +44,7 @@ def run_simulation() -> dict[str, object]:
         started = perf_counter()
         judgement = judgement_agent.judge_alert(alert, related_alerts=related_alerts)
         judgement.judgement_time_ms = round((perf_counter() - started) * 1000, 4)
-        workflow = workflow_engine.process(judgement)
+        workflow = workflow_engine.process(judgement, alert=alert)
         judgements.append(judgement)
         workflows.append(workflow)
 
