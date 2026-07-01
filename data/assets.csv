@@ -1,0 +1,9 @@
+asset_id,asset_name,asset_type,asset_importance,ip_address
+ASSET-WEB-01,management portal web server,web_server,high,10.10.20.11
+ASSET-WEB-02,document exchange web server,web_server,critical,10.10.20.12
+ASSET-AD-01,identity directory server,identity_server,critical,10.10.10.5
+ASSET-DB-01,operation management database,database,critical,10.10.30.21
+ASSET-FILE-01,engineering file server,file_server,high,10.10.40.18
+ASSET-OA-01,office automation server,office_server,medium,10.10.50.30
+ASSET-BACKUP-01,backup server,backup_server,medium,10.10.60.8
+ASSET-SCAN-01,authorized internal scanner,security_tool,low,10.10.70.9
